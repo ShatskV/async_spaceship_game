@@ -7,10 +7,6 @@
 ### Как установить
 
 - Python 3.8+ должен быть установлен
-- Затем используйте `pip` (или `pip3`, еслить есть конфликт с Python2) для установки зависимостей: 
-    ```
-    pip install -r requirements.txt
-    ```
 
 - Рекомндуется использовать [virtualenv/venv](https://docs.python.org/3/library/venv.html) для изоляции проекта.
 
