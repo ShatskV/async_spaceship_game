@@ -12,6 +12,7 @@ from fire_animation import fire
 TIC_TIMEOUT = 0.1
 FRAMES_PATH = 'frames/'
 BORDER_SIZE = 1
+STAR_PHASES_COUNT = 3
 
 
 def get_frames(path):
@@ -43,50 +44,54 @@ def change_coordinates(canvas, pos_row_y, pos_col_x, frame_col_x_min,
     return pos_row_y, pos_col_x
 
 
-async def animate_spaceship(canvas, frames, start_row, start_column):
+async def animate_spaceship(canvas, frames, start_row, start_column, border_size):
     frames_cycle = cycle(frames)
-    border_size = BORDER_SIZE
-    height, width = canvas.getmaxyx()
+    number_of_rows_window, number_of_columns_window = canvas.getmaxyx()
+    max_row_window = number_of_rows_window - 1 
+    max_column_window = number_of_columns_window - 1
+
     current_frame = next(frames_cycle)
     
     frame_size_y, frame_size_x = get_frame_size(current_frame)
-
-    frames_center_limits = {
+    # sub 1 because x, y coordinates of starts drawing, when frame width, frame height begin:
+    #wwwwwb : w - width of frame (5), b - border (1), right side of window (number of column = 10)
+    #456789 : frame must starts from column 4 -  max_column - border - width:  9 - 5 - 1 = 3, 
+    # so need to sub 1 (or add 1 to whole expression) from width of frame (same for rows) 
+    frames_coords_limits = {
         "frame_col_x_min": border_size,
-        "frame_col_x_max": width - frame_size_x - border_size,
+        "frame_col_x_max": max_column_window - (frame_size_x - 1) - border_size,
         "frame_row_y_min": border_size,
-        "frame_row_y_max": height - frame_size_y - border_size
+        "frame_row_y_max": max_row_window - (frame_size_y - 1) - border_size
     }
 
     col_x_frame = start_column - round(frame_size_x / 2)
     row_y_frame = start_row - round(frame_size_y / 2)
     for frame in frames_cycle:
         row_y_frame, col_x_frame = change_coordinates(canvas, row_y_frame, col_x_frame,
-                                                      **frames_center_limits)
+                                                      **frames_coords_limits)
         draw_frame(canvas, row_y_frame, col_x_frame, frame)
-        await go_to_sleep(0.2)
+        await sleep(0.1)
         draw_frame(canvas, row_y_frame, col_x_frame, frame, negative=True)
 
 
-def stars_generator(height, width, amount_stars=250):
-    all_coords_in_string = []
-    for _ in range(amount_stars):
-        y_pos = random.randint(1, height - 2)
-        x_pos = random.randint(1, width - 2)
+def generate_stars(max_row_window, max_column_window, border, number_of_stars=250):
+    all_stars_coords = []
+    for _ in range(number_of_stars):
+        y_pos = random.randint(border, max_row_window - border)
+        x_pos = random.randint(border, max_column_window - border)
         symbol = random.choice(['+', '*', '.', ':'])
-        # пишем координаты всех звезд, чтобы не было повторов, иначе будут артефакты
-        coords_in_string = ",".join([str(y_pos), str(x_pos)])
-        if  coords_in_string in all_coords_in_string:
-            amount_stars += 1
+        # save all stars coordinates to avoid coordinates collisions (number of stars will be less then set)
+        star_coords = (y_pos, x_pos)
+        if  star_coords in all_stars_coords:
+            number_of_stars += 1
             continue
-        else:
-            all_coords_in_string.append(coords_in_string)
+        all_stars_coords.append(star_coords)
         yield y_pos, x_pos, symbol 
 
 
-async def go_to_sleep(seconds):
-    iteration_count = int(seconds * 10)
-    for _ in range(iteration_count):
+async def sleep(tic_timeout):
+    seconds = int(tic_timeout * 10)
+    for _ in range(seconds):
         await asyncio.sleep(0)
 
 
@@ -94,46 +99,54 @@ async def blink(canvas, row, column, symbol='*', phase=0):
     while True:
         if phase == 0:
             canvas.addstr(row, column, symbol, curses.A_DIM)
-            await go_to_sleep(2)
+            await sleep(2)
             phase += 1
 
         if phase == 1:
             canvas.addstr(row, column, symbol)
-            await go_to_sleep(0.3)
+            await sleep(0.3)
             phase += 1
 
         if phase == 2:
             canvas.addstr(row, column, symbol, curses.A_BOLD)
-            await go_to_sleep(0.5)
+            await sleep(0.5)
             phase += 1
 
         if phase == 3:
             canvas.addstr(row, column, symbol)
-            await go_to_sleep(0.3)
+            await sleep(0.3)
             phase = 0
 
 
 def draw(canvas):
     curses.initscr()
     curses.curs_set(False)
+    # add this varables for sutiation when constans imports from .env
+    border_size = BORDER_SIZE
+    # phases starts count from 0
+    number_of_phases = STAR_PHASES_COUNT
     canvas.border()
+    # canvas.box([border_size, border_size])
     canvas.nodelay(True)
-    height, width = canvas.getmaxyx()
-    
-    coroutines = [blink(canvas, row, column, symbol, phase=random.randint(0, 3))
-                  for row, column, symbol in stars_generator(height, width)]
-    start_row = round(height / 2)
-    start_column = round(width / 2)
+    # Return a tuple (y, x) of number of columns and number rows  of the window
+    number_of_rows_window, number_of_columns_window = canvas.getmaxyx()
+    # sub 1 because rows and column count starts from 0
+    max_row_window = number_of_rows_window - 1 
+    max_column_window = number_of_columns_window - 1
+    coroutines = [blink(canvas, row, column, symbol, phase=random.randint(0, number_of_phases))
+                  for row, column, symbol in generate_stars(max_row_window, max_column_window, border_size)]
+    start_row = round(max_row_window / 2)
+    start_column = round(max_column_window / 2)
     frames = get_frames(path=FRAMES_PATH)
-    coroutines.append(animate_spaceship(canvas, frames, start_row, start_column))
+    coroutines.append(animate_spaceship(canvas, frames, start_row, start_column, border_size))
     while True:
         for coroutine in coroutines.copy():
             try:
                 coroutine.send(None)
-                canvas.refresh()
             except StopIteration:
                 coroutines.remove(coroutine)
-        if len(coroutines) == 0:
+        canvas.refresh()
+        if not coroutines:
             break
         time.sleep(TIC_TIMEOUT)
 
