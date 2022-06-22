@@ -12,23 +12,17 @@ from fire_animation import fire
 TIC_TIMEOUT = 0.1
 FRAMES_PATH = 'frames/'
 BORDER_SIZE = 1
-STAR_PHASES_COUNT = 3
 
 
 def get_frames(path):
     os.chdir(path)
-    frames_names = glob('*.txt')
+    frame_names = glob('*.txt')
     frames = []
-    for name in frames_names:
-        frame = get_frame_from_file(name)
+    for name in frame_names:
+        with open(name, "r") as file:
+            frame = file.read()
         frames.append(frame)
     return(frames)
-
-
-def get_frame_from_file(path):
-    with open(path, "r") as file:
-        frame = file.read()
-    return frame
 
 
 def change_coordinates(canvas, pos_row_y, pos_col_x, frame_col_x_min, 
@@ -74,7 +68,7 @@ async def animate_spaceship(canvas, frames, start_row, start_column, border_size
         draw_frame(canvas, row_y_frame, col_x_frame, frame, negative=True)
 
 
-def generate_stars(max_row_window, max_column_window, border, number_of_stars=250):
+def generate_stars(max_row_window, max_column_window, border, number_of_stars=350):
     all_stars_coords = []
     for _ in range(number_of_stars):
         y_pos = random.randint(border, max_row_window - border)
@@ -95,50 +89,38 @@ async def sleep(tic_timeout):
         await asyncio.sleep(0)
 
 
-async def blink(canvas, row, column, symbol='*', phase=0):
+async def blink(canvas, row, column, symbol='*'):
+    await sleep(random.uniform(0, 2))
     while True:
-        if phase == 0:
-            canvas.addstr(row, column, symbol, curses.A_DIM)
-            await sleep(2)
-            phase += 1
+        canvas.addstr(row, column, symbol, curses.A_DIM)
+        await sleep(2)
 
-        if phase == 1:
-            canvas.addstr(row, column, symbol)
-            await sleep(0.3)
-            phase += 1
+        canvas.addstr(row, column, symbol)
+        await sleep(0.3)
 
-        if phase == 2:
-            canvas.addstr(row, column, symbol, curses.A_BOLD)
-            await sleep(0.5)
-            phase += 1
+        canvas.addstr(row, column, symbol, curses.A_BOLD)
+        await sleep(0.5)
 
-        if phase == 3:
-            canvas.addstr(row, column, symbol)
-            await sleep(0.3)
-            phase = 0
+        canvas.addstr(row, column, symbol)
+        await sleep(0.3)
 
 
 def draw(canvas):
     curses.initscr()
     curses.curs_set(False)
-    # add this varables for sutiation when constans imports from .env
-    border_size = BORDER_SIZE
-    # phases starts count from 0
-    number_of_phases = STAR_PHASES_COUNT
     canvas.border()
-    # canvas.box([border_size, border_size])
     canvas.nodelay(True)
     # Return a tuple (y, x) of number of columns and number rows  of the window
     number_of_rows_window, number_of_columns_window = canvas.getmaxyx()
     # sub 1 because rows and column count starts from 0
     max_row_window = number_of_rows_window - 1 
     max_column_window = number_of_columns_window - 1
-    coroutines = [blink(canvas, row, column, symbol, phase=random.randint(0, number_of_phases))
-                  for row, column, symbol in generate_stars(max_row_window, max_column_window, border_size)]
+    coroutines = [blink(canvas, row, column, symbol)
+                  for row, column, symbol in generate_stars(max_row_window, max_column_window, BORDER_SIZE)]
     start_row = round(max_row_window / 2)
     start_column = round(max_column_window / 2)
     frames = get_frames(path=FRAMES_PATH)
-    coroutines.append(animate_spaceship(canvas, frames, start_row, start_column, border_size))
+    coroutines.append(animate_spaceship(canvas, frames, start_row, start_column, BORDER_SIZE))
     while True:
         for coroutine in coroutines.copy():
             try:
